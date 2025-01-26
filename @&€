@@ -1,0 +1,114 @@
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
+local UserInputService = game:GetService("User InputService")
+local Color3_fromRGB = Color3.fromRGB
+
+local settings = {
+    corpseESP = {
+        enabled = false, -- Set to false to disable ESP by default
+        textColor = Color3_fromRGB(255, 0, 0),
+        outlineColor = Color3_fromRGB(0, 0, 0),
+        unionColor = Color3_fromRGB(205, 205, 205)
+    },
+    atvESP = {
+        enabled = false, -- Set to false to disable ATV ESP by default
+        textColor = Color3_fromRGB(0, 255, 0),
+        outlineColor = Color3.fromRGB(0, 0, 0)
+    }
+}
+
+local CorpseCaches, ATVCache = {}, {}
+
+-- Function to handle corpse ESP
+Workspace.ChildAdded:Connect(function(child)
+    if settings.corpseESP.enabled then
+        local unionOp = child:FindFirstChildOfClass("UnionOperation")
+        if unionOp and unionOp.Color == settings.corpseESP.unionColor then
+            local corpseCache = Drawing.new("Text")
+            corpseCache.Size = 10
+            corpseCache.Color = settings.corpseESP.textColor
+            corpseCache.Outline = true
+            corpseCache.OutlineColor = settings.corpseESP.outlineColor
+            CorpseCaches[child] = corpseCache
+        end
+    end
+end)
+
+Workspace.ChildRemoved:Connect(function(child)
+    local corpseCache = CorpseCaches[child]
+    if corpseCache then
+        corpseCache:Remove()
+        CorpseCaches[child] = nil
+    end
+end)
+
+-- Function to handle ATV ESP
+Workspace.ChildAdded:Connect(function(child)
+    if settings.atvESP.enabled then
+        local seat = child:FindFirstChild("Seat")
+        local plastics = child:FindFirstChild("Plastics")
+        if seat and plastics then
+            local atvHighlight = Drawing.new("Text")
+            atvHighlight.Size = 10
+            atvHighlight.Color = settings.atvESP.textColor
+            atvHighlight.Outline = true
+            atvHighlight.OutlineColor = settings.atvESP.outlineColor
+            ATVCache[child] = atvHighlight
+        end
+    end
+end)
+
+Workspace.ChildRemoved:Connect(function(child)
+    local atvHighlight = ATVCache[child]
+    if atvHighlight then
+        atvHighlight:Remove()
+        ATVCache[child] = nil
+    end
+end)
+
+-- Update ESP positions and visibility
+RunService.Heartbeat:Connect(function()
+    if settings.corpseESP.enabled then
+        for corpse, corpseCache in pairs(CorpseCaches) do
+            local primaryPart = corpse.PrimaryPart
+            if primaryPart then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(primaryPart.Position)
+                corpseCache.Visible = onScreen
+                if corpseCache.Visible then
+                    local distance = (Camera.CFrame.Position - primaryPart.Position).Magnitude
+                    corpseCache.Text = "Corpse [" .. math.floor(distance) .. "]"
+                    corpseCache.Position = Vector2.new(screenPos.X, screenPos.Y)
+                end
+            end
+        end
+    end
+
+    if settings.atvESP.enabled then
+        for atv, atvHighlight in pairs(ATVCache) do
+            local primaryPart = atv.PrimaryPart
+            if primaryPart then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(primaryPart.Position)
+                atvHighlight.Visible = onScreen
+                if atvHighlight.Visible then
+                    local distance = (Camera.CFrame.Position - primaryPart.Position).Magnitude
+                    atvHighlight.Text = "ATV [" .. math.floor(distance) .. "]"
+                    atvHighlight.Position = Vector2.new(screenPos.X, screenPos.Y)
+                end
+            end
+        end
+    end
+end)
+
+-- Key bindings for toggling ESP
+User InputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if gameProcessedEvent then return end -- Ignore if the game is processing the input
+
+    if input.KeyCode == Enum.KeyCode.At then -- Use @ key to toggle ATV ESP
+        settings.atvESP.enabled = not settings.atvESP.enabled
+        print("ATV ESP toggled: " .. tostring(settings.atvESP.enabled))
+    elseif input.KeyCode == Enum.KeyCode.Euro then -- Use € key to toggle Corpse ESP
+        settings.corpseESP.enabled = not settings.corpseESP.enabled
+        print("Corpse ESP toggled: " .. tostring(settings.corpseESP.enabled))
+    end
+end)
