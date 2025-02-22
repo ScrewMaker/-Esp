@@ -1,28 +1,46 @@
 --[[
     WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
 ]]
+
 if (not _G.Flags) then
     _G.Flags = {
         ESP = {
             NotVisibleColor = Color3.fromRGB(255,0,0);
-            VisibleColor = Color3.fromRGB(0,255,0);
+            VisibleColor = Color3.fromRGB(0,255,0);    
             DistanceLimit = 1500;
-            Box = false;
+            Box = true;
             Name = true;
             Weapon = true;
             Distance = true;
             VisibleCheck = true;
+            Sleepers = false;
         };
     };
 end
 
 if (not _G.Loaded) then
     _G.Loaded = true;
-    local RunService = game:GetService("RunService");
-    local CoreGui = game:GetService("CoreGui");
-    local CurrentCamera = workspace.CurrentCamera;
-    local IgnoreFolder = workspace:WaitForChild("Ignore");
-    
+
+    local Players = game:GetService("Players")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local RunService = game:GetService("RunService")
+    local CoreGui = game:GetService("CoreGui")
+    local CurrentCamera = workspace.CurrentCamera
+    local IgnoreFolder = workspace:WaitForChild("Ignore")
+    local HasESP = {}
+
+    local SleepAnimationId = "rbxassetid://13280887764"
+
+    function IsSleeping(Player)
+        local Animations = Player.AnimationController:GetPlayingAnimationTracks()
+        for _, v in pairs(Animations) do
+            if v.IsPlaying and v.Animation.AnimationId == SleepAnimationId then
+                return true
+            end
+        end
+        return false
+    end
+
     function CreateESP()
         local BillboardGui = Instance.new("BillboardGui")
         local Box = Instance.new("Frame")
@@ -30,96 +48,143 @@ if (not _G.Loaded) then
         local PlayerWeapon = Instance.new("TextLabel")
         local PlayerDistance = Instance.new("TextLabel")
         local UIStroke = Instance.new("UIStroke")
-        
-        BillboardGui.Parent = CoreGui;
+
+        BillboardGui.Parent = CoreGui
         BillboardGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        BillboardGui.Active = true
         BillboardGui.AlwaysOnTop = true
         BillboardGui.LightInfluence = 1.000
         BillboardGui.Size = UDim2.new(500, 0, 800, 0)
 
         Box.Name = "Box"
         Box.Parent = BillboardGui
+        Box.AnchorPoint = Vector2.new(0.5, 0.5)
+        Box.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         Box.BackgroundTransparency = 1.000
         Box.BorderSizePixel = 0
+        Box.Position = UDim2.new(0.5, 0, 0.5, 0)
         Box.Size = UDim2.new(0.00899999961, 0, 0.00899999961, 0)
 
-        UIStroke.Parent = Box;
-        UIStroke.Thickness = 1;
-        UIStroke.Color = Color3.fromRGB(0,255,0);
+        UIStroke.Parent = Box
+        UIStroke.Thickness = 1
+        UIStroke.Color = Color3.fromRGB(0,255,0)
 
-        PlayerName.Name = "PlayerName"
         PlayerName.Parent = BillboardGui
+        PlayerName.AnchorPoint = Vector2.new(0.5, 1)
         PlayerName.BackgroundTransparency = 1.010
+        PlayerName.Position = UDim2.new(0.5, 0, 0.4955, 0)
         PlayerName.Size = UDim2.new(0, 100, 0, 10)
         PlayerName.Font = Enum.Font.SourceSans
         PlayerName.Text = "Player"
         PlayerName.TextColor3 = Color3.fromRGB(0, 255, 8)
         PlayerName.TextSize = 14.000
+        PlayerName.TextYAlignment = Enum.TextYAlignment.Bottom
 
-        PlayerWeapon.Name = "PlayerWeapon"
         PlayerWeapon.Parent = BillboardGui
         PlayerWeapon.BackgroundTransparency = 1.010
+        PlayerWeapon.Position = UDim2.new(0.5045, 0, 0.4955, 0)
         PlayerWeapon.Size = UDim2.new(0, 100, 0, 10)
         PlayerWeapon.Font = Enum.Font.SourceSans
         PlayerWeapon.Text = "Weapon"
         PlayerWeapon.TextColor3 = Color3.fromRGB(0, 255, 8)
         PlayerWeapon.TextSize = 14.000
-        PlayerWeapon.Visible = false;
+        PlayerWeapon.Visible = false
 
-        PlayerDistance.Name = "PlayerDistance"
         PlayerDistance.Parent = BillboardGui
+        PlayerDistance.AnchorPoint = Vector2.new(0.5, 0)
         PlayerDistance.BackgroundTransparency = 1.010
+        PlayerDistance.Position = UDim2.new(0.5, 0, 0.505, 5)
         PlayerDistance.Size = UDim2.new(0, 100, 0, 10)
         PlayerDistance.Font = Enum.Font.SourceSans
         PlayerDistance.Text = "500"
         PlayerDistance.TextColor3 = Color3.fromRGB(0, 255, 8)
         PlayerDistance.TextSize = 14.000
+        PlayerDistance.TextYAlignment = Enum.TextYAlignment.Bottom
 
-        return BillboardGui;
+        return BillboardGui
     end
-    
-    function SetColor(Billboard,Color) 
-        Billboard.PlayerName.TextColor3 = Color;
-        Billboard.PlayerDistance.TextColor3 = Color;
-        Billboard.PlayerWeapon.TextColor3 = Color;
-        Billboard.Box.UIStroke.Color = Color;
+
+    function IsPlayer(Model)
+        return Model:IsA("Model") and Model:FindFirstChild("Head") and Model.PrimaryPart ~= nil
     end
-    
-    local HasESP = {};
+
+    function SetColor(Billboard, Color)
+        Billboard.PlayerName.TextColor3 = Color
+        Billboard.PlayerDistance.TextColor3 = Color
+        Billboard.PlayerWeapon.TextColor3 = Color
+        Billboard.Box.UIStroke.Color = Color
+    end
+
+    function AddESPForPlayer(character)
+        if not character or HasESP[character] then return end
+        if IsPlayer(character) then
+            local Billboard = CreateESP()
+            HasESP[character] = Billboard
+            Billboard.Adornee = character.PrimaryPart
+        end
+    end
+
+    -- Apply ESP to existing players
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character then
+            AddESPForPlayer(player.Character)
+        end
+        player.CharacterAdded:Connect(function(character)
+            task.wait(0.5)
+            AddESPForPlayer(character)
+        end)
+    end
+
+    -- Detect new players joining
+    Players.PlayerAdded:Connect(function(player)
+        player.CharacterAdded:Connect(function(character)
+            task.wait(0.5)
+            AddESPForPlayer(character)
+        end)
+    end)
+
+    -- Detect NPCs or dynamic models appearing in workspace
+    workspace.ChildAdded:Connect(function(child)
+        task.wait(0.5)
+        if IsPlayer(child) then
+            AddESPForPlayer(child)
+        end
+    end)
+
+    -- Main loop for updating ESP
     RunService.Heartbeat:Connect(function()
-        local ESP =  _G.Flags.ESP;
-        for i,v in pairs(workspace:GetChildren()) do
-            if (HasESP[v] == nil and v:IsA("Model") and v:FindFirstChild("Head") and v.PrimaryPart~=nil) then
-                local Billboard = CreateESP();
-                HasESP[v] = Billboard;
-                Billboard.Adornee = v.PrimaryPart;
-            elseif (HasESP[v] ~= nil) then
-                local Billboard = HasESP[v];
-                local PrimaryPosition = v.PrimaryPart.Position;
-                local Origin = CurrentCamera.CFrame.Position;
-                local Distance = (Origin-PrimaryPosition).Magnitude;
-                
-                if (Distance > ESP.DistanceLimit) then
-                    Billboard.Enabled = false;
-                    continue;
+        local ESP = _G.Flags.ESP
+        for character, Billboard in pairs(HasESP) do
+            if character and character.PrimaryPart then
+                local Distance = (CurrentCamera.CFrame.Position - character.PrimaryPart.Position).Magnitude
+                local Sleeping = IsSleeping(character)
+
+                if Distance > ESP.DistanceLimit or (not ESP.Sleepers and Sleeping) then
+                    Billboard.Enabled = false
+                else
+                    Billboard.Enabled = true
+                    Billboard.Adornee = character.PrimaryPart
+
+                    Billboard.Box.Visible = ESP.Box
+                    Billboard.PlayerDistance.Visible = ESP.Distance
+                    Billboard.PlayerName.Visible = ESP.Name
+                    Billboard.PlayerWeapon.Visible = ESP.Weapon
+
+                    Billboard.PlayerDistance.Text = math.round(Distance) .. "s"
+                    Billboard.PlayerWeapon.Text = "None" -- Placeholder, modify if needed
+                    
+                    local headTag = character:FindFirstChild("Head") and character.Head:FindFirstChild("Nametag") 
+                    if headTag and headTag:FindFirstChild("tag") and headTag.tag:IsA("TextLabel") and headTag.tag.Text ~= "" then
+                        Billboard.PlayerName.Text = headTag.tag.Text
+                    end
+
+                    local Params = RaycastParams.new()
+                    Params.FilterDescendantsInstances = {IgnoreFolder, character}
+                    local Direction = character.PrimaryPart.Position - CurrentCamera.CFrame.Position
+                    local Raycast = workspace:Raycast(CurrentCamera.CFrame.Position, Direction, Params)
+                    SetColor(Billboard, (not Raycast or not ESP.VisibleCheck) and ESP.VisibleColor or ESP.NotVisibleColor)
                 end
-
-                Billboard.Enabled = true;
-                Billboard.Adornee = v.PrimaryPart;
-
-                Billboard.Box.Visible = ESP.Box;
-                Billboard.PlayerDistance.Visible = ESP.Distance;
-                Billboard.PlayerName.Visible = ESP.Name;
-                Billboard.PlayerWeapon.Visible = ESP.Weapon;
-
-                Billboard.PlayerDistance.Text = math.round(Distance) .. "s";
-                
-                local Params = RaycastParams.new();
-                Params.FilterDescendantsInstances = {IgnoreFolder,v};
-                local Direction = PrimaryPosition - Origin;
-                local Raycast = workspace:Raycast(Origin,Direction,Params);
-                SetColor(Billboard, if (not Raycast or not ESP.VisibleCheck) then ESP.VisibleColor else ESP.NotVisibleColor);
-            end	
+            end
         end
     end)
 end
